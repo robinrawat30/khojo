@@ -1,36 +1,91 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Campus Lost & Found
 
-## Getting Started
+A simple student lost and found web app built with Next.js, Tailwind CSS, and Supabase.
 
-First, run the development server:
+## Features
+
+- Home page with `Lost Item` and `Found Item` buttons
+- Create text-only reports with message, location, and contact phone
+- Feed of latest posts shown first
+- Clean UI optimized for college students
+
+## Setup
+
+1. Copy `.env.example` to `.env.local`
+2. Set your Supabase values and admin email:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+NEXT_PUBLIC_ADMIN_EMAIL=admin@example.com
+```
+
+3. Install dependencies:
+
+```bash
+npm install
+```
+
+4. Run the app:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+5. Open [http://localhost:3000](http://localhost:3000)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Supabase
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Create a Supabase project and add a `posts` table in the `public` schema. Use the Supabase SQL editor and run:
 
-## Learn More
+```sql
+create table public.posts (
+  id bigint generated always as identity primary key,
+  item_type text not null,
+  message text not null,
+  location text not null,
+  contact text not null,
+  user_id uuid references auth.users(id) on delete cascade,
+  resolved boolean default false,
+  created_at timestamp with time zone default timezone('utc', now())
+);
+```
 
-To learn more about Next.js, take a look at the following resources:
+If the table already exists, add the missing columns:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```sql
+alter table public.posts add column user_id uuid references auth.users(id) on delete cascade;
+alter table public.posts add column resolved boolean default false;
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+If you see an error about `public.posts` not being found, this table does not exist yet in your project.
 
-## Deploy on Vercel
+If your table exists but inserts still fail with a row-level security policy error, add these policies in the Supabase SQL editor:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```sql
+-- allow anonymous reads
+create policy "Allow select for everyone" on public.posts
+  for select
+  using (true);
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+-- allow authenticated inserts
+create policy "Allow insert for authenticated users" on public.posts
+  for insert
+  with check (auth.uid() = user_id);
+
+-- allow update for post owner
+create policy "Allow update for post owner" on public.posts
+  for update
+  using (auth.uid() = user_id);
+```
+
+Then refresh the schema cache and reload the app.
+
+Ensure your project's API keys are available in `.env.local` before running the site.
+
+## Notes
+
+- The app uses a Supabase client helper in `lib/supabaseClient.ts`
+- Login is handled with Google OAuth
+- Posts are fetched and displayed newest-first in the feed
+- Users can mark their own posts as resolved
